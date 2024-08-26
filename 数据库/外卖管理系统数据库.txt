@@ -1,0 +1,321 @@
+CREATE DATABASE KM;
+use KM;
+#创建客户表  consumption 客户的销费额
+CREATE TABLE customers(
+  id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(40) NOT NULL ,
+  consumption DOUBLE(16,2) NOT NULL DEFAULT 0,
+  phone VARCHAR(16) NOT NULL ,
+  address VARCHAR(45) NOT NULL
+);
+
+#创建商家表   turnovers商家营业额或销售收入。
+CREATE TABLE businesses(
+  id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(40) NOT NULL ,
+  turnover DOUBLE(16,2) NOT NULL DEFAULT 0,
+  phone VARCHAR(16) NOT NULL ,
+  address VARCHAR(45) NOT NULL
+);
+
+#创建商品表 小写
+CREATE TABLE goods(
+  id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(40) NOT NULL ,
+  business_id INT NOT NULL ,
+  price DOUBLE(16,2) NOT NULL ,
+  limit_num INT ,
+  FOREIGN KEY (business_id)
+  REFERENCES businesses(id)
+);
+
+#创建订单表   大写 定义一个state 的字段，用于存储订单的状态
+CREATE TABLE orders(
+  id INT NOT NULL AUTO_INCREMENT,
+  order_time DATETIME NOT NULL ,
+  customer_id INT NOT NULL ,
+  goods_id INT NOT NULL ,
+  number INT NOT NULL ,
+  total_cost DOUBLE(16,2) NOT NULL ,
+  state INT NOT NULL DEFAULT 0 ,
+  PRIMARY KEY (id),
+  FOREIGN KEY (customer_id) REFERENCES customers(id),
+  FOREIGN KEY (goods_id) REFERENCES goods(id)
+);
+
+#创建触发器
+DELIMITER ;
+
+#限购以及计算订单总额  限购以及计算订单总额的触发器
+  CREATE TRIGGER limit_buy
+  BEFORE INSERT
+  ON orders
+  FOR EACH ROW
+  BEGIN
+    DECLARE p DOUBLE(16,2);  /*商品单价*/
+    DECLARE lim INT;  /*限购数量*/
+    SET p=(SELECT price FROM goods WHERE goods.id=NEW.goods_id);
+    SET lim=(SELECT limit_num FROM goods WHERE goods.id=NEW.goods_id);
+    if (lim IS NOT NULL AND NEW.number>lim) THEN
+      SET NEW.number=lim;
+    END IF ;
+    SET NEW.total_cost=NEW.number*p;
+  END ;#
+
+#更新客户消费总额   在客户提交订单之后，自动将消费金额累加到客户总的消费金额里。
+CREATE TRIGGER calculate_consumption
+  AFTER INSERT
+  ON orders
+  FOR EACH ROW
+  BEGIN
+    UPDATE customers
+      SET consumption=consumption+NEW.total_cost
+    WHERE customers.id=NEW.customer_id;
+  END ;#
+
+#更新商家总营业额以及退款
+#商家接单后，自动将订单金额累加到商家的营业额里；
+#客户取消订单，自动将客户总消费减去本次订单金额。
+CREATE TRIGGER calculate_turnover
+  BEFORE UPDATE
+  ON orders
+  FOR EACH ROW
+  BEGIN
+    IF (NEW.state=1 AND OLD.state=0) THEN
+      UPDATE businesses
+        SET turnover=turnover+OLD.total_cost
+      WHERE id=(SELECT business_id FROM goods WHERE goods.id=NEW.goods_id);
+    ELSEIF (NEW.state=3 AND OLD.state=0) THEN
+      UPDATE customers
+      SET consumption=consumption-OLD.total_cost
+      WHERE id=OLD.customer_id;
+    ELSEIF (NEW.state<OLD.state) THEN
+      SET NEW.state=OLD.state;
+    END IF ;
+  END ;#
+
+
+#查看触发器
+SHOW TRIGGERS;
+#客户注册
+INSERT INTO customers(name, phone, address)
+VALUES ('科萌','18512312300','幸福花园42公寓');
+INSERT INTO customers(name, phone, address)
+VALUES ('张飞','18612312301','丈八一路56公寓');
+INSERT INTO customers(name, phone, address)
+VALUES ('马云云','18712312302','科技六路花园小区');
+INSERT INTO customers(name, phone, address)
+VALUES ('张小丽','18712412303','吉祥村');
+INSERT INTO customers(name, phone, address)
+VALUES ('小美','18572352304','韦一街');
+INSERT INTO customers(name, phone, address)
+VALUES ('李文','18632314305','百花村');
+INSERT INTO customers(name, phone, address)
+VALUES ('熊大','18712312406','狗熊岭狗熊洞');
+INSERT INTO customers(name, phone, address)
+VALUES ('赵雅','18519312307','龙首北路文景路口');
+INSERT INTO customers(name, phone, address)
+VALUES ('熊二','18112332808','狗熊岭狗熊树洞');
+INSERT INTO customers(name, phone, address)
+VALUES ('王洋','18112812309','太华北路立交桥');
+INSERT INTO customers(name, phone, address)
+VALUES ('陈欣','18152862310','世纪大道A座');
+INSERT INTO customers(name, phone, address)
+VALUES ('王胖子','18352388511','高新路科技大厦');
+
+#客户信息修改-----------------------------------------------
+#UPDATE customers SET phone='15789654314' WHERE id=2;
+#UPDATE customers SET address='华东交通大学创新大楼' WHERE id=3;
+#UPDATE customers SET address='江西财经大学大学生活动中心' WHERE id=7;
+
+
+#商家注册
+INSERT INTO businesses(name, phone, address)
+VALUES ('魏家凉皮','520123100','雁塔路步行街');
+INSERT INTO businesses(name, phone, address)
+VALUES ('美味饺子馆','520123101','便民商场旁边');
+INSERT INTO businesses(name, phone, address)
+VALUES ('百年拉面馆','520123102','美食城二楼32号');
+INSERT INTO businesses(name, phone, address)
+VALUES ('膳当家','520123103','购物广场负一层');
+INSERT INTO businesses(name, phone, address)
+VALUES ('沙县小吃','520123104','星火路25号');
+
+#商品录入及商品信息修改
+# 1）商品录入
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('重庆鸡公煲',1,13.9,1);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('麻辣香锅',1,12.5,5);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('土豆烧牛腩',1,14.9,NULL);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('韭菜猪肉馅',2,14.9,3);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('香菇猪肉馅',2,14.9,3);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('玉米猪肉馅',2,15.9,3);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('黑椒脆排饭',3,9.9,NULL);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('孜然脆排饭',3,9.5,NULL);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('叉烧脆排饭',3,11.8,2);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('腐竹黄焖鸡',4,10.8,3);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('黄焖鸡小份微辣',4,13,5);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('黄焖鸡小份中辣',4,14,5);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('鲜肉蒸饺',5,4,6);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('香拌混沌',5,5,3);
+INSERT INTO goods(name, business_id, price, limit_num)
+VALUES ('蛋炒南昌米粉',5,7,NULL);
+
+#商品信息修改
+#UPDATE goods SET limit_num=5 WHERE id=6;
+#UPDATE goods SET price=4.5 WHERE id=13;
+
+#客户提交订单
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-12-8 12:14:35',2,3,2);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-12-8 11:45:12',4,5,5);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-12-9 18:14:35',5,12,7);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-12-9 19:44:35',9,13,1);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-12-10 11:55:34',7,14,6);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-1-3 12:04:42',1,7,9);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-1-5 13:11:56',3,4,1);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-1-11 18:09:27',9,8,1);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-1-12 13:11:56',11,8,4);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-1-15 19:28:49',5,14,3);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-1-16 13:08:40',7,1,2);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-1-17 17:30:29',9,4,5);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-1-19 12:00:26',12,9,2);
+INSERT INTO orders(order_time, customer_id, goods_id, number)
+VALUES ('2024-1-21 17:34:56',4,14,4);
+
+#客户取消订单
+#UPDATE orders SET state=3 WHERE id=4;
+#UPDATE orders SET state=3 WHERE id=10;
+
+#商家接单   state 订单状态    接单？确认？取消？
+UPDATE orders SET state=1 WHERE id=1;
+UPDATE orders SET state=1 WHERE id=2;
+UPDATE orders SET state=1 WHERE id=3;
+UPDATE orders SET state=1 WHERE id=5;
+UPDATE orders SET state=1 WHERE id=6;
+UPDATE orders SET state=1 WHERE id=7;
+UPDATE orders SET state=1 WHERE id=8;
+UPDATE orders SET state=1 WHERE id=9;
+UPDATE orders SET state=1 WHERE id=11;
+UPDATE orders SET state=1 WHERE id=12;
+UPDATE orders SET state=1 WHERE id=13;
+UPDATE orders SET state=1 WHERE id=14;
+
+#客户确认收货
+UPDATE orders SET state=2 WHERE id=1;
+UPDATE orders SET state=2 WHERE id=2;
+UPDATE orders SET state=2 WHERE id=3;
+UPDATE orders SET state=2 WHERE id=5;
+UPDATE orders SET state=2 WHERE id=6;
+UPDATE orders SET state=2 WHERE id=7;
+UPDATE orders SET state=2 WHERE id=8;
+UPDATE orders SET state=2 WHERE id=9;
+UPDATE orders SET state=2 WHERE id=11;
+UPDATE orders SET state=2 WHERE id=12;
+UPDATE orders SET state=2 WHERE id=13;
+UPDATE orders SET state=2 WHERE id=14;
+
+#创建订单详情视图 =================================================================
+CREATE VIEW order_details AS
+SELECT orders.id AS 订单编号,
+businesses.name AS 商家名称,
+goods.name AS 商品名称,
+number AS 数量,
+total_cost AS 总额,
+state AS 订单状态,
+customers.name AS 客户姓名,
+customers.phone AS 电话,
+customers.address AS 地址,
+order_time AS 时间
+FROM ((businesses INNER JOIN goods ON businesses.id = goods.business_id)
+INNER JOIN orders ON
+goods.id = orders.goods_id)
+INNER JOIN customers ON
+orders.customer_id=customers.id;
+
+
+#查看视图
+SELECT * FROM order_details;
+
+#客户总消费及商家总营业额对比
+SELECT sum(consumption) AS 总消费
+FROM customers;
+SELECT sum(turnover) AS 总营业额
+FROM businesses;
+
+#查看2024年1月份商家的营业额排行榜
+SELECT businesses.id AS
+商家编号, businesses.name AS 商家名称,
+sum(total_cost) AS 2024年1月营业额
+
+FROM (orders INNER JOIN goods ON orders.goods_id = goods.id)
+INNER JOIN businesses
+ON business_id = businesses.id
+WHERE state IN (1,2) AND date(order_time)
+BETWEEN '2024-01-01' AND '2024-01-31'
+GROUP BY businesses.id
+ORDER BY 2024年1月营业额 DESC ;
+
+
+############################################################################33
+# 为orders表的customer_id和goods_id创建索引
+CREATE INDEX idx_orders_customer_id ON orders(customer_id);
+CREATE INDEX idx_orders_goods_id ON orders(goods_id);
+
+# 为goods表的business_id和price创建索引
+CREATE INDEX idx_goods_business_id ON goods(business_id);
+CREATE INDEX idx_goods_price ON goods(price);
+
+# 为businesses表的id和name创建索引
+CREATE INDEX idx_businesses_id ON businesses(id);
+CREATE INDEX idx_businesses_name ON businesses(name);
+
+# 为customers表的id和name创建索引
+CREATE INDEX idx_customers_id ON customers(id);
+CREATE INDEX idx_customers_name ON customers(name);
+
+# 如果经常根据下单时间查询订单，为order_time创建索引
+CREATE INDEX idx_orders_order_time ON orders(order_time);
+
+
+
+CREATE VIEW view_daily_business_revenue AS
+SELECT
+  DATE(order_time) AS order_date,
+  businesses.name AS business_name,
+  SUM(orders.total_cost) AS daily_total_revenue
+FROM orders
+INNER JOIN goods ON orders.goods_id = goods.id
+INNER JOIN businesses ON goods.business_id = businesses.id
+WHERE orders.state IN (1, 2) -- 只计算已接单或已确认收货的订单
+GROUP BY DATE(order_time), businesses.name
+ORDER BY DATE(order_time) DESC, daily_total_revenue DESC;
+
+
+
+SELECT * FROM view_daily_business_revenue;
